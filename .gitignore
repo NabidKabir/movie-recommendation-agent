@@ -1,0 +1,8 @@
+.env
+.env.*
+venv
+.venv
+
+HEAD
+.venv/
+venv/
