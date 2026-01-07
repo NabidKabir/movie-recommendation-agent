@@ -6,3 +6,9 @@ venv
 HEAD
 .venv/
 venv/
+
+rag_db/
+
+kb/
+
+__pycache__/
