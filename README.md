@@ -1,17 +1,38 @@
-# movie-recommendation-agent
+# Movie Recommendation Agent
 
-A recommendation agent that uses custom-built RAG database to tailor new movies based on individual taste
+A personalized movie recommendation agent that uses a custom-built RAG database to suggest new movies based on individual taste.
 
-Here I have provided my own Letterboxd data to serve as a test for you and for personal use myself. However you can swap the files in /kb with your own Letterboxd CSV files by obtaining them from your account. You MUST have a letterboxd account in order for it to work, as the CSV ingestion is very specific. 
+This repository includes sample Letterboxd data for testing and personal use. You can replace the provided files in the `/kb` folder with your own Letterboxd CSV exports. A Letterboxd account is required to use your own data, as the CSV ingestion is tailored to their export format.
 
-# Step 1: (Skip if merely want to test with my provided data)
+---
 
-Export your letterboxd data from their website. In the exported zip file you will find three files 
-    ratings.csv
-    watched.csv
-    watchlist.csv
-Swap these files with the provided files under the same name. This will allow your personal data to be used as the agent knowledge base
+## Step 1: Prepare Your Letterboxd Data (Optional)
 
-# Step 2
+If you want to use your own data:
 
-Make sure you have all the requirements as seen in requirements.txt set up. Run the file kb_ingest.py, this will create a folder known as rag_db within the directory, which will act as our knowledge base. 
+1. Export your Letterboxd data from your account.  
+2. In the exported ZIP file, locate the following CSV files:  
+   - `ratings.csv`  
+   - `watched.csv`  
+   - `watchlist.csv`  
+3. Replace the corresponding files in the `/kb` folder with your own CSVs, keeping the same filenames.
+
+> This allows the agent to use your personal movie history as the knowledge base.
+
+---
+
+## Step 2: Set Up the Knowledge Base
+
+1. Install the dependencies listed in `requirements.txt`.  
+2. Run `kb_ingest.py` to ingest your CSV data.  
+
+This will create a folder called `rag_db` in the project directory, which serves as the agent’s knowledge base.
+
+---
+
+## Step 3: Running the MCP Server
+
+The MCP server exposes your recommendation tools and handles agent queries.
+
+```bash
+python mcp_server.py
