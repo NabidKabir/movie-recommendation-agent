@@ -5,6 +5,8 @@ from langchain_chroma import Chroma
 from dotenv import load_dotenv
 import os
 import tmdbsimple as tmdb
+import asyncio
+from functools import partial
 
 # Load env files to access TDMB API KEY
 load_dotenv()
@@ -200,8 +202,16 @@ def kb_ingest():
         "movies_ingested": len(texts)
     }
 
+# tmdbsimple library is a synchronous library, so in order to make asynchronous calls we must wrap function calls 
+# in an async wrapper.
+async def run_blocking(func, *args, **kwargs):
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        None, partial(func, args, kwargs)
+    )
+
 @movie_mcp.tool(title="Movie Knowledge Base Retrieval")
-def retrieve_personal_movies(query: str, top_k: int = 5) -> dict:
+async def retrieve_personal_movies(query: str, top_k: int = 5) -> dict:
     """
         Function that retrieves relevant movie information from the knowledge base.
 
@@ -216,12 +226,15 @@ def retrieve_personal_movies(query: str, top_k: int = 5) -> dict:
     if not os.path.exists(chroma_path):
         return {"status": "error", "message": "Chroma DB missing. Run kb_ingest() first."}
     
-    db = Chroma(
+    vector_store = Chroma(
+        collection_name="knowledge-base",
         embedding_function=OpenAIEmbeddings(model="text-embedding-3-small"),
         persist_directory=chroma_path
     )
 
-    results = db.similarity_search(query, k=top_k)
+    # According to LLM response, this function is still blocking, however I cannot find any documentation citing that,
+    # So I will keep it as using Chroma's built in function unless it breaks somewhere along the way.
+    results = await vector_store.asimilarity_search(query, k=top_k)
     output = []
     for doc in results:
         metadata = doc.metadata.copy()
@@ -247,7 +260,7 @@ for doc in watchlist_docs:
     watchlist_keys.add(key)
 
 @movie_mcp.tool(title="TMDB Movie Recommend")
-def tmdb_movie_recommend(similar_to: str | None = None,
+async def tmdb_movie_recommend(similar_to: str | None = None,
                          genres: list[str] | None = None,
                          min_rating: float = 7,
                          top_k: int = 5):
@@ -274,10 +287,11 @@ def tmdb_movie_recommend(similar_to: str | None = None,
 
     if similar_to:
         search = tmdb.Search()
-        response = search.movie(query=similar_to)
+        response = await run_blocking(search.movie, query=similar_to)
+
         if response.get("results"):
             movie_id = response["results"][0]["id"]
-            similar = tmdb.Movies(movie_id).similar()
+            similar = await run_blocking(tmdb.Movies(movie_id).similar,)
             results = similar.get("results", [])
 
 
@@ -290,7 +304,7 @@ def tmdb_movie_recommend(similar_to: str | None = None,
             discover_args["vote_average_gte"] = min_rating
 
         discover = tmdb.Discover()
-        response = discover.movie(**discover_args)
+        response = await run_blocking(discover.movie, **discover_args)
         results = response.get("results", [])
 
     recommendations = []
@@ -310,7 +324,7 @@ def tmdb_movie_recommend(similar_to: str | None = None,
     return {"status": "success", "results": recommendations}
 
 @movie_mcp.tool(title="Get Movie Cover")
-def get_movie_cover(tmdb_id: int | None = None, title: str | None = None, year: str | None = None):
+async def get_movie_cover(tmdb_id: int | None = None, title: str | None = None, year: str | None = None):
     """
     Retrieve a movie poster image URL and TMDB page link.
     
@@ -327,7 +341,7 @@ def get_movie_cover(tmdb_id: int | None = None, title: str | None = None, year: 
     # If we don't have tmdb_id, search by title + year
     if tmdb_id is None and title:
         search = tmdb.Search()
-        response = search.movie(query=title)
+        response = await run_blocking(search.movie, query=title)
         if response.get("results"):
             # If year is given, try to match
             if year:
@@ -340,10 +354,13 @@ def get_movie_cover(tmdb_id: int | None = None, title: str | None = None, year: 
     # If we now have tmdb_id, fetch full details
     if tmdb_id:
         details = tmdb.Movies(tmdb_id)
-        info = details.info()
+        info = await run_blocking(details.info)
         poster_path = info.get("poster_path")
         poster_url = f"https://image.tmdb.org/t/p/w300{poster_path}" if poster_path else None
         tmdb_url = f"https://www.themoviedb.org/movie/{tmdb_id}"
         return {"poster_url": poster_url, "tmdb_url": tmdb_url}
     
     return {"poster_url": None, "tmdb_url": None}
+
+if __name__ == "__main__":
+    movie_mcp.run(transport="http", host="0.0.0.0", port=8000)
