@@ -12,3 +12,4 @@ rag_db/
 kb/
 
 __pycache__/
+test_mcp_tools.py

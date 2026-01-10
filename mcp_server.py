@@ -6,7 +6,8 @@ from dotenv import load_dotenv
 import os
 import tmdbsimple as tmdb
 import asyncio
-from functools import partial
+import functools
+from typing import Callable, Any
 
 # Load env files to access TDMB API KEY
 load_dotenv()
@@ -204,11 +205,11 @@ def kb_ingest():
 
 # tmdbsimple library is a synchronous library, so in order to make asynchronous calls we must wrap function calls 
 # in an async wrapper.
-async def run_blocking(func, *args, **kwargs):
+async def run_blocking(func, **kwargs):
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(
-        None, partial(func, args, kwargs)
-    )
+    partial = functools.partial(func, **kwargs)
+
+    return await loop.run_in_executor(None, partial)
 
 @movie_mcp.tool(title="Movie Knowledge Base Retrieval")
 async def retrieve_personal_movies(query: str, top_k: int = 5) -> dict:
@@ -234,7 +235,7 @@ async def retrieve_personal_movies(query: str, top_k: int = 5) -> dict:
 
     # According to LLM response, this function is still blocking, however I cannot find any documentation citing that,
     # So I will keep it as using Chroma's built in function unless it breaks somewhere along the way.
-    results = await vector_store.asimilarity_search(query, k=top_k)
+    results = await vector_store.asimilarity_search("Love Exposure", k=top_k)
     output = []
     for doc in results:
         metadata = doc.metadata.copy()
@@ -260,7 +261,7 @@ for doc in watchlist_docs:
     watchlist_keys.add(key)
 
 @movie_mcp.tool(title="TMDB Movie Recommend")
-async def tmdb_movie_recommend(similar_to: str | None = None,
+async def tmdb_movie_recommend(*, similar_to: str | None = None,
                          genres: list[str] | None = None,
                          min_rating: float = 7,
                          top_k: int = 5):
@@ -291,7 +292,7 @@ async def tmdb_movie_recommend(similar_to: str | None = None,
 
         if response.get("results"):
             movie_id = response["results"][0]["id"]
-            similar = await run_blocking(tmdb.Movies(movie_id).similar,)
+            similar = await run_blocking(tmdb.Movies(movie_id).similar_movies)
             results = similar.get("results", [])
 
 
